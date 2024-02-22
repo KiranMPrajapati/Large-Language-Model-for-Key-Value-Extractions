@@ -99,7 +99,7 @@ training_arguments = TrainingArguments(
     lr_scheduler_type=lr_scheduler_type,
 )
 
-max_seq_length = 512
+max_seq_length = 2048
 
 trainer = SFTTrainer(
     model=model,
