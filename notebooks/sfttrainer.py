@@ -1,5 +1,6 @@
 import json
 import random
+from numpy import dsplit
 import wandb
 from wandb import Api
 from pathlib import Path
@@ -20,9 +21,6 @@ import re
 
 wandb.login()
 
-csv_file = pd.read_csv('index_info.csv')
-index_info = csv_file['Index of data without headers'].tolist()
-
 # Function to add backticks to HTML tags
 def add_backticks_to_html_tags(html_content):
     # Define the regular expression pattern to match HTML tags
@@ -33,36 +31,35 @@ def add_backticks_to_html_tags(html_content):
 
 # row = alpaca[232]
 # print(prompt_input(row))
-def prompt_translation(row, mode='train'):
-    eval_mode = True
-    if mode == 'train':
-        eval_mode = False
-    addon_prompt = "Read the following texts and table with financial data from an S&P 500 earnings report carefully.Based on the question-answer history (if provided), answer the last question. The answer may require mathematical calculation based on the data provided."
-    input_prompt =f"""<s> [INST] {addon_prompt}\n
-        {add_backticks_to_html_tags(row['PIPE_encoding'])}\n
-        {row['question']}\n
-        [/INST]
-        {row['answer']} </s>
-        """
-    return input_prompt
+def prompt_formatter(row, mode='train'):
+    addon_prompt = "Read the following texts and table with financial data from an S&P 500 earnings report carefully. Provide the exact answer only."
+    # return (
+    #     f"""<s> [INST] {addon_prompt}\n
+    #     {row['json_encoding']}\n
+    #     {row['question']}\n
+    #     [/INST]
+    #     {row['answer']} </s>
+    #     """
+    #   )
+    return (
+        f"<human>: {addon_prompt}\n {row['json_encoding']}\n {row["question"]}\n <bot>: {row["answer"]}"
+        )
 
-def create_translation_prompt(row, mode='train'):
-    # print(prompt_translation(row, mode)[0])
-    return prompt_translation(row, mode)
-
+def create_formatted_prompt(row, mode='train'):
+    return prompt_formatter(row, mode)
 # api = Api()
 # artifact = api.artifact('spygaurad/alpaca_gpt4_dolly_ft/alpaca_gpt4_dolly_splitted', type='dataset')
 # dataset_dir = artifact.download()
-translation_ds = load_dataset("json", data_files='dataset_with_all_encodings.json')
-print(translation_ds)
+ds = load_dataset("json", data_files='json_encoded_convfinqa.json')
+print(ds)
 
-train_dataset = translation_ds["train"].select([i for i in range(15000)])
+train_dataset = ds["train"].select([i for i in range(15000)])
 print(train_dataset)
-eval_dataset = translation_ds["train"].select([i for i in range(15000, 17612)])
+eval_dataset = ds["train"].select([i for i in range(15000, 17612)])
 print(eval_dataset)
 
-model_id = 'Open-Orca/Mistral-7B-OpenOrca'
-# model_id = 'microsoft/phi-2'
+# model_id = 'Open-Orca/Mistral-7B-OpenOrca'
+model_id ="llmware/dragon-mistral-7b-v0"
 # tokenizer = AutoTokenizer.from_pretrained(model_id)
 
 model_kwargs = dict(
@@ -87,7 +84,7 @@ peft_config = LoraConfig(
 
 batch_size = 4
 # 3 * (4 * 32)
-num_train_epochs = 3
+num_train_epochs = 2
 gradient_accumulation_steps = 32
 total_num_steps = num_train_epochs * len(train_dataset) // (batch_size * gradient_accumulation_steps)
 
@@ -118,19 +115,18 @@ trainer = SFTTrainer(
     model=model_id,
     model_init_kwargs=model_kwargs,
     train_dataset=train_dataset,
-    eval_dataset=eval_dataset,
     packing=True,
-    max_seq_length=1024,
+    max_seq_length=1500,
     args=training_args,
-    formatting_func=create_translation_prompt,
+    formatting_func=create_formatted_prompt,
     peft_config=peft_config,
 )
 
 # remove answers
-def create_prompt_no_anwer(row):
-    return {"text": create_translation_prompt(row, mode='eval')}
+# def create_prompt_no_anwer(row):
+    # return {"text": create_translation_prompt(row, mode='eval')}
 
-test_dataset = eval_dataset.map(create_prompt_no_anwer)
+# test_dataset = eval_dataset.map(create_prompt_no_anwer)
 # wandb_callback = LLMSampleCB(trainer, test_dataset, num_samples=10, max_new_tokens=256)
 # trainer.add_callback(wandb_callback)
 
