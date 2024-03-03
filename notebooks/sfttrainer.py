@@ -1,6 +1,7 @@
 import json
 import random
 from numpy import dsplit
+from numpy import dsplit
 import wandb
 from wandb import Api
 from pathlib import Path
@@ -25,6 +26,8 @@ sys.path.append(Path(os.getcwd()).parent)
 
 wandb.login()
 
+csv_file = pd.read_csv('index_info.csv')
+index_info = csv_file['Index of data without headers'].tolist()
 
 # Function to add backticks to HTML tags
 def add_backticks_to_html_tags(html_content):
@@ -131,8 +134,13 @@ peft_config = LoraConfig(
 
 batch_size = 1
 # 3 * (4 * 32)
+<<<<<<< HEAD
 num_train_epochs = 2
 gradient_accumulation_steps = 128
+=======
+num_train_epochs = 3
+gradient_accumulation_steps = 32
+>>>>>>> c2d6a8612ff84defe4a97cbe34017c78381bb411
 total_num_steps = num_train_epochs * len(train_dataset) // (batch_size * gradient_accumulation_steps)
 
 output_dir = "results_V3/"
@@ -163,19 +171,18 @@ trainer = SFTTrainer(
     train_dataset=train_dataset,
     # eval_dataset = eval_dataset,
     packing=True,
-    max_seq_length=2048,
+    max_seq_length=1024,
     args=training_args,
-    dataset_text_field="prompt",
-    # formatting_func=create_formatted_prompt,
+    formatting_func=create_translation_prompt,
     peft_config=peft_config,
 )
 
 
 # remove answers
-# def create_prompt_no_anwer(row):
-    # return {"text": create_translation_prompt(row, mode='eval')}
+# # def create_prompt_no_anwer(row):
+    # # return {"text": create_translation_prompt(row, mode='eval')}
 
-
+# 
 # test_dataset = eval_dataset.map(create_prompt_no_anwer)
 # wandb_callback = LLMSampleCB(trainer, eval_dataset, num_samples=10, max_new_tokens=256)
 # trainer.add_callback(wandb_callback)
