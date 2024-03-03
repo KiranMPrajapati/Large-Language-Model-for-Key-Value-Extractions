@@ -20,7 +20,7 @@ import re
 import sys
 import os
 sys.path.append(Path(os.getcwd()).parent)
-from llm_recipes.utils import LLMSampleCB
+# from llm_recipes.utils import LLMSampleCB
 
 
 wandb.login()
@@ -65,11 +65,12 @@ def create_formatted_prompt(row, mode='train'):
 # eval_dataset = ds["train"].select([i for i in range(15000, 16193)])
 # print(eval_dataset)
 
-df = pd.read_csv('../data/multiple_answer_single_answers_V2_2048.csv')
-train_df = df[:24500]
+df = pd.read_csv('../data/pseudo_json_dataset_V2_2048.csv')
+print(df.shape)
+train_df = df[:15000]
 train_df["value"] = (
     "<human>:" +
-    train_df['json_encoding'] + "\n" +
+    train_df['pseudo_json_encoding'] + "\n" +
     train_df['question'] + "\n" +
     "<bot>:" +
     train_df['answer']
@@ -82,10 +83,10 @@ custom_train_ds["prompt"] = train_df['value']
 train_dataset = Dataset.from_pandas(custom_train_ds)
 print(train_dataset)
 
-test_df = df[24500:]
+test_df = df[15000:]
 test_df["value"] = (
     "<human>:" +
-    test_df['json_encoding'] + "\n" +
+    test_df['pseudo_json_encoding'] + "\n" +
     test_df['question'] + "\n" +
     "<bot>:"
 )
@@ -117,28 +118,30 @@ model_kwargs = dict(
 peft_config = LoraConfig(
     r=64,  # the rank of the LoRA matrices
     lora_alpha=16, # the weight
-    lora_dropout=0.1, # dropout to add to the LoRA layers
+    lora_dropout=0.5, # dropout to add to the LoRA layers
     bias="none", # add bias to the nn.Linear layers?
     task_type="CAUSAL_LM",
     # target_modules = ['fc1', 'fc2', 'Wqkv', 'out_proj'],# Specific for Phi2
     target_modules=["q_proj", "k_proj","v_proj","o_proj"], # the name of the layers to add LoRA
+    # target_modules = ["model.layers.31.self_attn.q_proj", "model.layers.31.self_attn.k_proj", "model.layers.31.self_attn.v_proj",
+    #                   "model.layers.31.self_attn.o_proj", "model.layers.30.self_attn.q_proj", "model.layers.30.self_attn.k_proj", 
+    #                   "model.layers.30.self_attn.v_proj", "model.layers.30.self_attn.o_proj",]
 )
 
 
 batch_size = 1
 # 3 * (4 * 32)
 num_train_epochs = 2
-gradient_accumulation_steps = 64
+gradient_accumulation_steps = 128
 total_num_steps = num_train_epochs * len(train_dataset) // (batch_size * gradient_accumulation_steps)
 
-
-output_dir = "results/"
+output_dir = "results_V3/"
 training_args = TrainingArguments(
     output_dir=output_dir,
     per_device_train_batch_size=batch_size,
     per_device_eval_batch_size=batch_size//2,
     bf16=True,
-    learning_rate=3e-4,
+    learning_rate=2e-4,
     lr_scheduler_type="cosine",
     warmup_ratio = 0.1,
     max_steps=total_num_steps,
@@ -158,7 +161,7 @@ trainer = SFTTrainer(
     model=model_id,
     model_init_kwargs=model_kwargs,
     train_dataset=train_dataset,
-    eval_dataset = eval_dataset,
+    # eval_dataset = eval_dataset,
     packing=True,
     max_seq_length=2048,
     args=training_args,
@@ -174,8 +177,8 @@ trainer = SFTTrainer(
 
 
 # test_dataset = eval_dataset.map(create_prompt_no_anwer)
-wandb_callback = LLMSampleCB(trainer, eval_dataset, num_samples=10, max_new_tokens=256)
-trainer.add_callback(wandb_callback)
+# wandb_callback = LLMSampleCB(trainer, eval_dataset, num_samples=10, max_new_tokens=256)
+# trainer.add_callback(wandb_callback)
 
 
 trainer.train()
