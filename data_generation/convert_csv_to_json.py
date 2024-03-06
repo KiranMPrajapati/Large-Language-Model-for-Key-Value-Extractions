@@ -1,8 +1,8 @@
 import csv
 import json
 
-csv_file_path = 'convfinqa_in_different_format_V1.csv'
-json_file_path = 'convfinqa_in_different_format_V1.json'
+csv_file_path = '../data/convfinqa_json_max_length_2048.csv'
+json_file_path = '../data/convfinqa_json_max_length_2048.json'
 
 data = []
 
