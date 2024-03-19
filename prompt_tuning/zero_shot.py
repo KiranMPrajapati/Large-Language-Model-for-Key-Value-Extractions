@@ -69,7 +69,7 @@ for index, row in tqdm(df.iterrows()):
     if pred == ground_truth:
         true_pos += 1 
         true_pos_index = 1 
-    similarity_ratio = difflib.SequenceMatcher(None, pred, row['answer']).ratio()
+    similarity_ratio = difflib.SequenceMatcher(None, pred, ground_truth).ratio()
     difflib_similarity += similarity_ratio
     output_df.at[index, 'index'] = df.loc[index, 'index']
     output_df.at[index, 'question'] = df.loc[index,'question']

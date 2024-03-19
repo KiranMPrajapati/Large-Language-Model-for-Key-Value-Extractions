@@ -6,8 +6,10 @@ from pathlib import Path
 
 import wandb
 import pandas as pd
+import numpy as np
 
 from datasets import load_from_disk
+from peft import AutoPeftModelForCausalLM
 
 import evaluate
 import torch
@@ -174,6 +176,7 @@ class LLMSampleCB(WandbCallback):
     
     def samples_table(self, examples):
         records_table = wandb.Table(columns=["prompt", "generation"] + list(self.gen_config.to_dict().keys()))
+        print('This is an example',examples)
         for example in tqdm(examples, leave=False):
             prompt = example["text"]
             generation = self.generate(prompt=prompt)
@@ -209,4 +212,18 @@ def freeze(model, n_freeze, freeze_embed, module_name="layers"):
     # Freeze embeddings for small memory decrease
     if freeze_embed:
         embed_tokens = _find_mod(model, "embed_tokens")
-        embed_tokens.weight.requires_grad_(False);
+        embed_tokens.weight.requires_grad_(False)
+
+
+def peft_module_casting_to_bf16(model):
+    from peft.tuners.tuners_utils import BaseTunerLayer
+
+    for name, module in model.named_modules():
+        if isinstance(module, BaseTunerLayer):
+            module = module.to(torch.bfloat16)
+        elif isinstance(module, torch.nn.LayerNorm) or "norm" in name:
+            module = module.to(torch.float32)
+        elif any(x in name for x in ["lm_head", "embed_tokens", "wte", "wpe"]):
+            if hasattr(module, "weight"):
+                if module.weight.dtype == torch.float32:
+                    module = module.to(torch.bfloat16)
