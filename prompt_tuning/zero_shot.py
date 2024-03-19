@@ -1,6 +1,5 @@
 import torch
 import difflib
-import torchmetrics
 from transformers import (
     AutoModelForCausalLM,
     AutoTokenizer,
@@ -43,8 +42,12 @@ llm = pipeline(
     # streamer=streamer,
 )
 
-addon_prompt = "Read the following texts and table with financial data from an S&P 500 earnings report carefully. Your task is to accurately respond to the specific question asked."
-
+addon_prompt = """Read the following texts and table with financial data from an S&P 500 earnings report carefully. Your task is to accurately respond to the specific question asked.
+Let's think step by step """
+index = 16
+example_context = df.loc[index, 'pseudo_json_encoding']
+example_question = df.loc[index, 'question']
+example_answer = df.loc[index, 'answer']
 def format_prompt(row):
     input_prompt = f"<human>: {addon_prompt}\n {row['pseudo_json_encoding']}\n {row['question']}\n <bot>: "
     return input_prompt
@@ -56,20 +59,34 @@ def extract_value_after_bot(text):
 
 output_df = pd.DataFrame(columns=['index', 'question', 'answer', 'prediction', 'diff_score', 'is_answer_correct'])
 
+def remove_zero_after_dot(input_str):
+    if '.' in input_str:
+        parts = input_str.split('.')
+        if len(parts) > 1:
+            parts[1] = parts[1].lstrip('0')
+            if parts[1] == '':
+                return parts[0]
+            else:
+                return '.'.join(parts)
+    return input_str
+
 difflib_similarity = 0 
 true_pos = 0 
 partial_true_pos = 0 
-for index, row in tqdm(df.iterrows()):
+total_samples = 2000 
+for index, row in tqdm(df[:total_samples].iterrows()):
     prompt = format_prompt(row)
     output = llm(prompt)[0]['generated_text']
     pred = extract_value_after_bot(output)
     pred = str(pred).lstrip().replace('$', '').lstrip()
-    ground_truth = str(row['answer']).lstrip().replace('$', '').lstrip()
+    pred = remove_zero_after_dot(pred)
+    spred = pred.split()
+    ground_truth = str(row['answer']).lstrip().replace('$', '').replace(',','').replace('%', '').lstrip()
     true_pos_index = 0 
-    if pred == ground_truth:
-        true_pos += 1 
-        true_pos_index = 1 
-    similarity_ratio = difflib.SequenceMatcher(None, pred, row['answer']).ratio()
+    if ground_truth in spred: 
+        true_pos+=1
+        true_pos_index = 1
+    similarity_ratio = difflib.SequenceMatcher(None, pred, ground_truth).ratio()
     difflib_similarity += similarity_ratio
     output_df.at[index, 'index'] = df.loc[index, 'index']
     output_df.at[index, 'question'] = df.loc[index,'question']
@@ -79,11 +96,11 @@ for index, row in tqdm(df.iterrows()):
     output_df.at[index, 'is_answer_correct'] = true_pos_index
 
 
-similarity = difflib_similarity/len(df)
+similarity = difflib_similarity/len(df[:total_samples])
 print('similarity', similarity)
-accuracy = true_pos/len(df)
+accuracy = true_pos/len(df[:total_samples])
 print('accuracy', accuracy)
 
-output_df.to_csv('../output/pseudo_json_dataset_V3_2048_zero_shot_results.csv', index=False)
+output_df.to_csv('../output/pseudo_json_dataset_V3_2048_zero_shot_results_CoT.csv', index=False)
 
 
