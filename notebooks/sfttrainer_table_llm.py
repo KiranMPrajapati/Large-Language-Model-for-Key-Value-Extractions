@@ -41,13 +41,14 @@ def convert_to_csv(table):
     # Write rows to the StringIO object
     writer = csv.writer(csv_buffer)
     trows = table.find_all('tr')
+    final_csv = ''
     for trow in trows:
+        writer = csv.writer(csv_buffer)
         writer.writerow([cell.get_text() for cell in trow.find_all(['td', 'th'])])
-
-
-    # Get the CSV data as a string
-    csv_data = csv_buffer.getvalue()
-    return csv_data
+        csv_data = csv_buffer.getvalue().replace('\n', '').replace('  ', '')
+        csv_buffer = StringIO()
+        final_csv += csv_data + '\n'
+    return final_csv
 
 def prompt_formatter(row, mode='train'):
     soup = BeautifulSoup(row['html_content'], 'html.parser')
@@ -169,10 +170,10 @@ scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=100, gamma=0.1)
 optimizers = optimizer, scheduler
 
 
-output_dir = "results_V11/"
+output_dir = "results_V13/"
 training_args = TrainingArguments(
     output_dir=output_dir,
-    run_name="finetune_lm_head_transformer_layers_and_mlp_layers_TableLLM",
+    run_name="finetune_lm_head_transformer_layers_and_mlp_layers_TableLLM_csv",
     per_device_train_batch_size=batch_size,
     per_device_eval_batch_size=batch_size,
     bf16=True,
